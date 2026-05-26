@@ -1,0 +1,24 @@
+name: crossbody
+channels:
+  - pytorch
+  - nvidia
+  - defaults
+dependencies:
+  - python=3.8
+  # 针对 RTX 4060，建议至少使用 CUDA 11.8 对应的 PyTorch
+  - pytorch=2.0.1
+  - torchvision=0.15.2
+  - torchaudio=2.0.2
+  - pytorch-cuda=11.8
+  - numpy
+  - scipy
+  - pandas
+  - scikit-learn
+  - pyyaml
+  - pip
+  - pip:
+    - tensorboard
+    - tqdm
+    # 如果你还需要在这里进行数据预处理（比如用到一些旋转角度转换算法）
+    # 可以选择保留以下库，否则也可以删掉
+    - transforms3d
