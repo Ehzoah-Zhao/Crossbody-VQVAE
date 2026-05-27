@@ -65,6 +65,12 @@ if __name__ == '__main__':
     writer = SummaryWriter(args.out_dir)
     logger.info(json.dumps(vars(args), indent=4, sort_keys=True))
 
+    # ================= 【新增：WandB 初始化】 =================
+    import wandb
+    # 将超参数配置项传给 config，并将你的实验名 exp_name 作为本次 Run 的名字
+    wandb.init(project="Crossbody-VQVAE", name=args.exp_name, config=vars(args))
+    # ========================================================
+
     # ── 2. 数据集加载（对齐包含划分配对与归一化参数的新接口） ─────────────
     # 组合训练集划分名单 train.txt 的完整路径
     train_txt_path = os.path.join(args.split_txt_dir, 'train.txt')
@@ -178,6 +184,10 @@ if __name__ == '__main__':
 
         optimizer.zero_grad()
         loss.backward()
+
+        # === 新增：强制梯度裁剪，防止梯度爆炸摧毁网络 ===
+        torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
+
         optimizer.step()
 
         # 统计指标累加
@@ -191,6 +201,11 @@ if __name__ == '__main__':
 
         if nb_iter % args.print_iter == 0:
             n = args.print_iter
+
+            # ================= 【新增：WandB 记录 Warmup】 =================
+            wandb.log({f'Warmup/{k}': stats[k] / n for k in stats}, step=nb_iter)
+            # ============================================================
+
             logger.info(
                 f"Warmup [{nb_iter:6d}/{args.warm_up_iter}] lr={current_lr:.5f} | "
                 f"ReconA={stats['recon_A']/n:.4f} ReconB={stats['recon_B']/n:.4f} | "
@@ -271,6 +286,10 @@ if __name__ == '__main__':
 
         optimizer.zero_grad()
         loss.backward()
+
+        # === 新增：强制梯度裁剪，防止梯度爆炸摧毁网络 ===
+        torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
+        
         optimizer.step()
         scheduler.step()
 
@@ -289,8 +308,14 @@ if __name__ == '__main__':
         # ── 7.5 日志打印与 TensorBoard 监控 ──
         if nb_iter % args.print_iter == 0:
             n = args.print_iter
+            # 计算全局真实步数
+            global_step = args.warm_up_iter + nb_iter
+            
             for k in stats:
-                writer.add_scalar(f'Train/{k}', stats[k] / n, nb_iter)
+                writer.add_scalar(f'Train/{k}', stats[k] / n, global_step)
+                
+            # 将 global_step 传给 WandB
+            wandb.log({f'Train/{k}': stats[k] / n for k in stats}, step=global_step)
 
             logger.info(
                 f"Iter {nb_iter:6d} | "

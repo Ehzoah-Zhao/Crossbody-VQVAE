@@ -4,6 +4,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class QuantizeEMAReset(nn.Module):
+    """
+    引入了 L2 归一化的 Factorized VQ (Spherical VQ) 版本，
+    旨在彻底解决传统欧氏距离下的 Codebook Collapse (码本坍塌) 问题。
+    添加了 epsilon 防止梯度爆炸，并修复了球面空间下 Commitment Loss 过小的问题。
+    """
     def __init__(self, nb_code, code_dim, args):
         super().__init__()
         self.nb_code = nb_code
@@ -15,9 +20,11 @@ class QuantizeEMAReset(nn.Module):
         self.init = False
         self.code_sum = None
         self.code_count = None
-        self.register_buffer('codebook', torch.zeros(self.nb_code, self.code_dim).cuda())
+        # 码本初始化 (将在第一次 forward 时被覆盖)
+        self.register_buffer('codebook', torch.randn(self.nb_code, self.code_dim).cuda())
 
     def _tile(self, x):
+        """当输入样本少于码本数量时，平铺并加入极小噪声填充"""
         nb_code_x, code_dim = x.shape
         if nb_code_x < self.nb_code:
             n_repeats = (self.nb_code + nb_code_x - 1) // nb_code_x
@@ -30,46 +37,53 @@ class QuantizeEMAReset(nn.Module):
 
     def init_codebook(self, x):
         out = self._tile(x)
-        self.codebook = out[:self.nb_code]
+        initial_codes = out[:self.nb_code]
+        # 【修改 1】：添加 eps=1e-6 防止除零导致的梯度爆炸
+        initial_codes = F.normalize(initial_codes, p=2, dim=-1, eps=1e-6)
+        
+        self.codebook = initial_codes
         self.code_sum = self.codebook.clone()
         self.code_count = torch.ones(self.nb_code, device=self.codebook.device)
         self.init = True
         
     @torch.no_grad()
     def compute_perplexity(self, code_idx) : 
-        # Calculate new centres
-        code_onehot = torch.zeros(self.nb_code, code_idx.shape[0], device=code_idx.device)  # nb_code, N * L
+        code_onehot = torch.zeros(self.nb_code, code_idx.shape[0], device=code_idx.device) 
         code_onehot.scatter_(0, code_idx.view(1, code_idx.shape[0]), 1)
-
-        code_count = code_onehot.sum(dim=-1)  # nb_code
+        code_count = code_onehot.sum(dim=-1) 
         prob = code_count / torch.sum(code_count)  
         perplexity = torch.exp(-torch.sum(prob * torch.log(prob + 1e-7)))
         return perplexity
     
     @torch.no_grad()
     def update_codebook(self, x, code_idx):
-        
-        code_onehot = torch.zeros(self.nb_code, x.shape[0], device=x.device)  # nb_code, N * L
+        code_onehot = torch.zeros(self.nb_code, x.shape[0], device=x.device)  
         code_onehot.scatter_(0, code_idx.view(1, x.shape[0]), 1)
 
-        code_sum = torch.matmul(code_onehot, x)  # nb_code, w
-        code_count = code_onehot.sum(dim=-1)  # nb_code
+        code_sum = torch.matmul(code_onehot, x)  # (nb_code, code_dim)
+        code_count = code_onehot.sum(dim=-1)     # (nb_code,)
 
         out = self._tile(x)
         code_rand = out[:self.nb_code]
+        # 【修改 2】：添加 eps=1e-6
+        code_rand = F.normalize(code_rand, p=2, dim=-1, eps=1e-6)
 
-        # Update centres
-        self.code_sum = self.mu * self.code_sum + (1. - self.mu) * code_sum  # w, nb_code
-        self.code_count = self.mu * self.code_count + (1. - self.mu) * code_count  # nb_code
+        # EMA 更新中心点
+        self.code_sum = self.mu * self.code_sum + (1. - self.mu) * code_sum 
+        self.code_count = self.mu * self.code_count + (1. - self.mu) * code_count 
 
-        usage = (self.code_count.view(self.nb_code, 1) >= 1.0).float()
+        # 【修改 3】：放宽死亡判定阈值，从 1.0 降到 0.5
+        usage = (self.code_count.view(self.nb_code, 1) >= 0.5).float()
+        
         code_update = self.code_sum.view(self.nb_code, self.code_dim) / self.code_count.view(self.nb_code, 1)
+        
+        # 【修改 4】：添加 eps=1e-6
+        code_update = F.normalize(code_update, p=2, dim=-1, eps=1e-6)
 
         self.codebook = usage * code_update + (1 - usage) * code_rand
+        
         prob = code_count / torch.sum(code_count)  
         perplexity = torch.exp(-torch.sum(prob * torch.log(prob + 1e-7)))
-
-            
         return perplexity
 
     def preprocess(self, x):
@@ -79,46 +93,48 @@ class QuantizeEMAReset(nn.Module):
         return x
 
     def quantize(self, x):
-        # Calculate latent code x_l
+        """
+        基于球面余弦相似度的量化过程
+        """
+        # 【修改 5】：对输入的连续特征进行 L2 归一化，并添加 eps=1e-6
+        x_norm = F.normalize(x, p=2, dim=-1, eps=1e-6)
         k_w = self.codebook.t()
-        distance = torch.sum(x ** 2, dim=-1, keepdim=True) - 2 * torch.matmul(x, k_w) + torch.sum(k_w ** 2, dim=0,
-                                                                                            keepdim=True)  # (N * L, b)
-        _, code_idx = torch.min(distance, dim=-1)
+        
+        # 使用内积（余弦相似度）来寻找最近邻
+        similarity = torch.matmul(x_norm, k_w)  # (N*T, nb_code)
+        _, code_idx = torch.max(similarity, dim=-1)
         return code_idx
 
     def dequantize(self, code_idx):
         x = F.embedding(code_idx, self.codebook)
         return x
 
-    
     def forward(self, x):
         N, width, T = x.shape
 
-        # Preprocess
         x = self.preprocess(x)
 
-        # Init codebook if not inited
         if self.training and not self.init:
             self.init_codebook(x)
 
-        # quantize and dequantize through bottleneck
-        code_idx = self.quantize(x)
+        # 【修改 6】：量化前归一化，添加 eps=1e-6
+        x_norm = F.normalize(x, p=2, dim=-1, eps=1e-6)
+        
+        code_idx = self.quantize(x_norm)
         x_d = self.dequantize(code_idx)
 
-        # Update embeddings
         if self.training:
             perplexity = self.update_codebook(x, code_idx)
         else : 
             perplexity = self.compute_perplexity(code_idx)
         
-        # Loss
-        commit_loss = F.mse_loss(x, x_d.detach())
+        # 【修改 7】：修复 Commit Loss 在球面空间中过小的问题
+        commit_loss = F.mse_loss(x_norm, x_d.detach(), reduction='none').sum(dim=-1).mean()
 
-        # Passthrough
-        x_d = x + (x_d - x).detach()
+        # Straight-through estimator
+        x_d = x_norm + (x_d - x_norm).detach()
 
-        # Postprocess
-        x_d = x_d.view(N, T, -1).permute(0, 2, 1).contiguous()   #(N, DIM, T)
+        x_d = x_d.view(N, T, -1).permute(0, 2, 1).contiguous()
         
         return x_d, commit_loss, perplexity
 
@@ -242,7 +258,7 @@ class QuantizeReset(nn.Module):
 
         # Update centres
         self.code_count = code_count  # nb_code
-        usage = (self.code_count.view(self.nb_code, 1) >= 1.0).float()
+        usage = (self.code_count.view(self.nb_code, 1) >= 0.5).float()
 
         self.codebook.data = usage * self.codebook.data + (1 - usage) * code_rand
         prob = code_count / torch.sum(code_count)  
