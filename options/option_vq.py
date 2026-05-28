@@ -69,4 +69,15 @@ def get_args_parser():
     parser.add_argument('--seed', default=123, type=int, help='随机种子')
     parser.add_argument("--resume-pth", type=str, default=None, help='恢复训练的 checkpoint 权重路径 (用于断点续传)')
 
+    
+    # 跨本体直接监督损失 (v2 新增)
+    parser.add_argument('--w_cross_direct', type=float, default=1.0,
+                        help='直接跨本体监督损失权重 (核心新增: A->B_hat 应与 B_gt 一致)')
+    parser.add_argument('--cross_ramp_iter', type=int, default=15000,
+                        help='cross loss / cycle / contrastive 的 ramp-up 迭代数')
+    parser.add_argument('--val_interval', type=int, default=2000,
+                        help='验证集评估间隔 (迭代数)')
+    parser.add_argument('--val_samples', type=int, default=32,
+                        help='验证集样本数')
+
     return parser.parse_args()
