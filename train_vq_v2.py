@@ -123,8 +123,7 @@ if __name__ == '__main__':
 
     STAT_KEYS = ['recon_A', 'recon_B', 'vel_A', 'vel_B',
                  'cross_AB', 'cross_BA', 'cycle_ABA', 'cycle_BAB',
-                 'contrast', 'commit', 'ppl_A', 'ppl_B',
-                 'val_cross_AB', 'val_cross_BA']
+                 'contrast', 'commit', 'ppl_A', 'ppl_B']
 
     # ================= 5. 权重调度 =================
     def get_weights(iter_num):
@@ -241,10 +240,14 @@ if __name__ == '__main__':
                 with torch.no_grad():
                     vcB, _, _ = net.forward_AB(v_A)
                     vcA, _, _ = net.forward_BA(v_B)
-                    stats['val_cross_AB'] = recon_loss(vcB, v_B, v_mask).item()
-                    stats['val_cross_BA'] = recon_loss(vcA, v_A, v_mask).item()
+                    stats['val_cross_AB_tmp'] = recon_loss(vcB, v_B, v_mask).item()
+                    stats['val_cross_BA_tmp'] = recon_loss(vcA, v_A, v_mask).item()
                 net.train()
-                logger.info(f'  >>> VAL | cross_AB={stats["val_cross_AB"]:.6f}  cross_BA={stats["val_cross_BA"]:.6f}')
+                writer.add_scalar('Val/cross_AB', stats['val_cross_AB_tmp'], nb_iter)
+                writer.add_scalar('Val/cross_BA', stats['val_cross_BA_tmp'], nb_iter)
+                wandb.log({'Val/cross_AB': stats['val_cross_AB_tmp'],
+                           'Val/cross_BA': stats['val_cross_BA_tmp']}, step=nb_iter)
+                logger.info(f'  >>> VAL | cross_AB={stats["val_cross_AB_tmp"]:.6f}  cross_BA={stats["val_cross_BA_tmp"]:.6f}')
 
             for k in stats:
                 writer.add_scalar(f'Train/{k}', stats[k] / n, global_step)
