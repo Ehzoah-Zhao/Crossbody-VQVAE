@@ -3,13 +3,13 @@
 import torch
 
 # ------------------------------------------------------------------ #
-#  SMPL  ·  22 关节  ·  134 维
+#  SMPL (HumanML3D)  22 joints  134 dim
 # ------------------------------------------------------------------ #
 SMPL_CONFIG = {
     'name': 'smpl',
     'n_joints': 22,
     'rot_dim': 6,
-    'input_dim': 134,           # Root(4) + 21关节×6D + contact(4)
+    'input_dim': 134,           # Root(4) + 21*joints*6D + contact(4)
     'contact_indices': [7, 8, 10, 11],
     'kinematic_tree': [
         [0, 1, 4, 7, 10],
@@ -18,17 +18,64 @@ SMPL_CONFIG = {
         [9, 13, 16, 18, 20],
         [9, 14, 17, 19, 21],
     ],
-    'offsets': None,            # 填入 shape (22,3) 的 T-pose offset
+    'offsets': None,
 }
 
 # ------------------------------------------------------------------ #
-#  Unitree G1  ·  30 关节  ·  186 维
+#  Unitree G1 v4  30 joints  363 dim (with explicit 3D positions)
+#
+#  363-dim layout:
+#    [0:1]    r_velocity    (1)   root yaw angular velocity
+#    [1:3]    root_vel_xz   (2)   root local XZ velocity
+#    [3:4]    root_y        (1)   root height
+#    [4:91]   ric_data      (87)  root-relative positions (29 joints x 3)
+#    [91:271] rot_data      (180) 6D rotations (30 joints x 6)
+#    [271:361] local_vel    (90)  local joint velocities (30 joints x 3)
+#    [361:363] contacts     (2)   left/right foot contact
+# ------------------------------------------------------------------ #
+G1_CONFIG_V4 = {
+    'name': 'g1_v4',
+    'n_joints': 30,
+    'rot_dim': 6,
+    'input_dim': 363,
+    'contact_indices': [6, 12],  # left foot, right foot in kinematic tree
+    'rot_slice': (91, 271),       # 6D rotation slice in 363-dim vector
+    'ric_slice': (4, 91),         # RIC position slice
+    'contact_slice': (361, 363),  # Contact label slice
+    'kinematic_tree': [
+        [0, 1, 2, 3, 4, 5, 6],           # left leg
+        [0, 7, 8, 9, 10, 11, 12],        # right leg
+        [0, 13, 14, 15],                  # torso
+        [15, 16, 17, 18, 19, 20, 21, 22], # left arm
+        [15, 23, 24, 25, 26, 27, 28, 29], # right arm
+    ],
+    'offsets': [
+        [ 0.0,       0.0,       0.0     ], [ -0.064452, -0.1027,    0.0     ],
+        [ -0.052,    -0.030465,  0.0     ], [ 0.0,      -0.12412,   0.025001],
+        [ -0.0021489,-0.17734,  -0.078273], [ 0.000094, -0.30001,   0.0     ],
+        [ 0.0,      -0.017558,  0.0     ], [ 0.064452, -0.1027,    0.0     ],
+        [ 0.052,    -0.030465,  0.0     ], [ 0.0,      -0.12412,   0.025001],
+        [ 0.0021489,-0.17734,  -0.078273], [ -0.000094, -0.30001,   0.0     ],
+        [ 0.0,      -0.017558,  0.0     ], [ 0.0,       0.0,       0.0     ],
+        [ 0.0,       0.044,    -0.003964], [ 0.0,       0.0,       0.0     ],
+        [ -0.10022,   0.24778,   0.003956], [ -0.038,    -0.013831,  0.0     ],
+        [ -0.00624,  -0.1032,    0.0     ], [ 0.0,      -0.080518,  0.015783],
+        [ -0.001888, -0.010,     0.100   ], [ 0.0,       0.0,       0.038   ],
+        [ 0.0,       0.0,       0.046   ], [ 0.10021,   0.24778,   0.003956],
+        [ 0.038,    -0.013831,  0.0     ], [ 0.00624,  -0.1032,    0.0     ],
+        [ 0.0,      -0.080518,  0.015783], [ 0.001888, -0.010,     0.100   ],
+        [ 0.0,       0.0,       0.038   ], [ 0.0,       0.0,       0.046   ],
+    ],
+}
+
+# ------------------------------------------------------------------ #
+#  Legacy G1 config (186-dim) - kept for backward compatibility
 # ------------------------------------------------------------------ #
 G1_CONFIG = {
     'name': 'g1',
     'n_joints': 30,
     'rot_dim': 6,
-    'input_dim': 186,           # Root(4) + 30关节×6D + contact(2)
+    'input_dim': 186,           # Root(4) + 30*joints*6D + contact(2)
     'contact_indices': [6, 12],
     'kinematic_tree': [
         [0, 1, 2, 3, 4, 5, 6],
@@ -37,11 +84,11 @@ G1_CONFIG = {
         [15, 16, 17, 18, 19, 20, 21, 22],
         [15, 23, 24, 25, 26, 27, 28, 29],
     ],
-    'offsets': None,            # 填入 shape (30,3) 的 T-pose offset
+    'offsets': None,
 }
 
 # ------------------------------------------------------------------ #
-#  共享隐空间维度  ←  两个 VQVAE 必须一致
+#  Shared latent space dimensions
 # ------------------------------------------------------------------ #
-LATENT_DIM  = 512    # encoder 输出 / codebook 向量维度
-NUM_CODES   = 512    # codebook 大小
+LATENT_DIM  = 512    # encoder output / codebook vector dim
+NUM_CODES   = 512    # codebook size
