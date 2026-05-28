@@ -109,7 +109,7 @@ if __name__ == "__main__":
         width=args.width, depth=args.depth,
         dilation_growth_rate=args.dilation_growth_rate,
         activation=getattr(args, "activation", getattr(args, "vq_act", "relu")), norm=getattr(args, "norm", getattr(args, "vq_norm", None)),
-        quantizer_type=args.quantizer_type, mu=args.mu,
+        quantizer_type=args.quantizer, mu=args.mu,
     ).cuda()
 
     # ========== 4. Losses ==========
