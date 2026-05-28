@@ -116,7 +116,7 @@ if __name__ == "__main__":
     recon_loss = MotionReconLoss(loss_type="l1_smooth")
     contrastive_loss = ContrastiveLoss(temperature=0.07)
     unp_contrast_loss = UnpairedContrastiveLoss(temperature=0.07, num_patches=8)
-    fk_loss_fn = FKPositionLoss(supervised_weight=1.0, self_consist_weight=0.3, ee_weight=2.0)
+    fk_loss_fn = FKPositionLoss(supervised_weight=1.0, self_consist_weight=0.3, ee_weight=2.0).cuda()
 
     # ========== 5. Optimizer ==========
     optimizer = optim.AdamW(net.parameters(), lr=args.lr, betas=(0.9, 0.99), weight_decay=1e-5)

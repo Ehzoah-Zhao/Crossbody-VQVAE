@@ -69,7 +69,7 @@ class FKPositionLoss(nn.Module):
 
     def fk(self, rot_6d):
         *bd, J, _ = rot_6d.shape
-        off = self.offsets.view(*([1]*len(bd)), J, 3).expand(*bd, -1, -1)
+        off = self.offsets.to(rot_6d.device).view(*([1]*len(bd)), J, 3).expand(*bd, -1, -1)
         rm = self.rot6d_to_mat(rot_6d)
         jts = torch.zeros(*bd, J, 3, device=rot_6d.device)
         for chain in self.tree:
