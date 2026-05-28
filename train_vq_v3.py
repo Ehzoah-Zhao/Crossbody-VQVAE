@@ -112,6 +112,15 @@ if __name__ == "__main__":
         quantizer_type=args.quantizer, mu=args.mu,
     ).cuda()
 
+    # ---- Resume from checkpoint ----
+    start_iter = 0
+    if args.resume_pth is not None and os.path.exists(args.resume_pth):
+        logger.info("Resuming from %s", args.resume_pth)
+        ckpt = torch.load(args.resume_pth, map_location="cuda")
+        net.load_state_dict(ckpt["net"])
+        start_iter = ckpt.get("iter", 0)
+        logger.info("Resumed at iter %d", start_iter)
+
     # ========== 4. Losses ==========
     recon_loss = MotionReconLoss(loss_type="l1_smooth")
     contrastive_loss = ContrastiveLoss(temperature=0.07)
@@ -129,7 +138,7 @@ if __name__ == "__main__":
     stats = make_zero_stats(*STAT_KEYS)
 
     logger.info("Starting training (363-dim + FK + CUT)...")
-    for nb_iter in range(args.total_iter):
+    for nb_iter in range(start_iter, args.total_iter):
         w = get_weights(nb_iter, args.warm_up_iter)
 
         # ---- Load ----
@@ -248,7 +257,7 @@ if __name__ == "__main__":
         # ---- Checkpoint ----
         if nb_iter % args.save_iter == 0:
             ckpt = os.path.join(args.out_dir, "net_iter%07d.pth" % nb_iter)
-            torch.save(dict(net=net.state_dict(), iter=nb_iter), ckpt)
+            torch.save(dict(net=net.state_dict(), iter=nb_iter, optimizer=optimizer.state_dict(), scheduler=scheduler.state_dict()), ckpt)
             logger.info("Checkpoint -> %s", ckpt)
 
     logger.info("Training complete!")
