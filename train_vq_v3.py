@@ -62,8 +62,8 @@ def get_weights(nb_iter, warm_up_iter):
                     contact=0.0, bone_len=0.0)
     else:
         return dict(recon=1.0, vel=0.5, commit=0.02, cycle=0.1, contrast=0.05,
-                    unp_contrast=0.05, fk_sup=0.3, fk_sc=0.1, fk_ee=0.5,
-                    contact=0.1, bone_len=0.05)
+                    unp_contrast=0.05, fk_sup=0.8, fk_sc=0.3, fk_ee=1.5,
+                    contact=0.3, bone_len=0.1)
 
 
 if __name__ == "__main__":
