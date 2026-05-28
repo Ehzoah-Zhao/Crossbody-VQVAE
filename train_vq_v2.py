@@ -61,7 +61,13 @@ if __name__ == '__main__':
     logger.info(json.dumps(vars(args), indent=4, sort_keys=True))
 
     import wandb
-    wandb.init(project='Crossbody-VQVAE', name=args.exp_name, config=vars(args))
+    resume_wandb = args.resume_pth is not None
+    wandb_id = None
+    if resume_wandb:
+        ckpt_tmp = torch.load(args.resume_pth, map_location='cpu', weights_only=False)
+        wandb_id = ckpt_tmp.get('wandb_id', None)
+    wandb.init(project='Crossbody-VQVAE', name=args.exp_name, config=vars(args),
+               id=wandb_id, resume='must' if wandb_id else None)
 
     # ================= 2. 数据加载 =================
     train_txt = os.path.join(args.split_txt_dir, 'train.txt')
@@ -106,10 +112,20 @@ if __name__ == '__main__':
         mu=args.mu,
     ).cuda()
 
+    start_iter = 0
     if args.resume_pth:
         logger.info(f'Resuming from {args.resume_pth}')
         ckpt = torch.load(args.resume_pth, map_location='cuda')
         net.load_state_dict(ckpt['net'], strict=True)
+        if 'iter' in ckpt:
+            start_iter = ckpt['iter']
+            logger.info(f'Resuming at iteration {start_iter}')
+        if 'optimizer' in ckpt:
+            optimizer.load_state_dict(ckpt['optimizer'])
+            logger.info('Optimizer state restored')
+        if 'scheduler' in ckpt:
+            scheduler.load_state_dict(ckpt['scheduler'])
+            logger.info('Scheduler state restored')
 
     # ================= 4. 优化器 =================
     optimizer = optim.AdamW(net.parameters(), lr=args.lr,
@@ -144,10 +160,13 @@ if __name__ == '__main__':
         return w
 
     # ================= 6. 训练主循环 =================
-    logger.info('=== Phase 1: Warm-up (self-recon only) ===')
+    if start_iter == 0:
+        logger.info('=== Phase 1: Warm-up (self-recon only) ===')
+    else:
+        logger.info(f'=== Resumed at iter {start_iter}, continuing ===')
     stats = make_zero_stats(*STAT_KEYS)
 
-    for nb_iter in range(1, args.total_iter + 1):
+    for nb_iter in range(start_iter + 1, args.total_iter + 1):
         w = get_weights(nb_iter)
 
         # --- 获取数据 ---
@@ -210,9 +229,9 @@ if __name__ == '__main__':
         torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
         optimizer.step()
 
-        if nb_iter <= args.warm_up_iter:
+        if nb_iter <= args.warm_up_iter and start_iter < args.warm_up_iter:
             optimizer, _ = update_lr_warm_up(optimizer, nb_iter, args.warm_up_iter, args.lr)
-        else:
+        elif nb_iter > args.warm_up_iter:
             scheduler.step()
 
         # --- 累计统计 ---
@@ -266,7 +285,13 @@ if __name__ == '__main__':
         # --- 保存 checkpoint ---
         if nb_iter % args.save_iter == 0:
             ckpt_path = os.path.join(args.out_dir, f'net_iter{nb_iter:07d}.pth')
-            torch.save({'net': net.state_dict(), 'iter': nb_iter}, ckpt_path)
+            torch.save({
+                'net': net.state_dict(),
+                'iter': nb_iter,
+                'optimizer': optimizer.state_dict(),
+                'scheduler': scheduler.state_dict(),
+                'wandb_id': wandb.run.id,
+            }, ckpt_path)
             logger.info(f'Checkpoint saved -> {ckpt_path}')
 
     logger.info('=== Training completed ===')
