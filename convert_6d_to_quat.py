@@ -17,10 +17,10 @@ from tqdm import tqdm
 import torch
 
 # ================= CONFIG =================
-INPUT_DIR = "./dataset/unitreeg1/new_joint_vecs_v4"   # 363D data
-OUTPUT_DIR = "./dataset/unitreeg1/new_joint_vecs_v5"  # 303D data
-META_IN_DIR = "./dataset/unitreeg1/meta_v4"            # old Mean/Std
-META_OUT_DIR = "./dataset/unitreeg1/meta_v5"           # new Mean/Std
+INPUT_DIR = "./dataset/unitreeg1/new_joint_vecs_v4"   # 363D data (system disk, read-only)
+OUTPUT_DIR = "/home/ubuntu/data_drive/dataset/unitreeg1/new_joint_vecs_v5"  # 303D data -> data drive!
+META_IN_DIR = "./dataset/unitreeg1/meta_v4"            # old Mean/Std (system disk, read-only)
+META_OUT_DIR = "/home/ubuntu/data_drive/dataset/unitreeg1/meta_v5"  # new Mean/Std -> data drive!
 
 N_JOINTS = 30
 # 363D slices
