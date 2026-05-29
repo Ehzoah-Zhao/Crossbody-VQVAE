@@ -165,7 +165,8 @@ if __name__ == "__main__":
         mask_B = mask_B.cuda()
 
         # ---- Forward ----
-        recon_A, recon_B, commit_A, commit_B, ppl_A, ppl_B = net(motion_A, motion_B)
+        recon_A, commit_A, ppl_A = net.forward_A(motion_A)
+        recon_B, commit_B, ppl_B = net.forward_B(motion_B)
 
         # ---- Reconstruction ----
         l_recon_A = recon_loss(recon_A, motion_A, mask_A)
