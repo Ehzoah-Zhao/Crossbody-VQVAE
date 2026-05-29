@@ -137,33 +137,36 @@ class FKPositionLoss(nn.Module):
 
 
 def orthogonal_regularization(rot_6d, mask=None):
-    '''Orthogonal regularization: ||R^T R - I||_F for each rotation matrix.
+    '''Orthogonal regularization: directly constrain raw 6D vectors.
     
-    Encourages the 6D rotation representation to produce valid rotation matrices.
-    Uses Frobenius norm: sum over joints and frames, then average.
-
+    For 6D rotation [a1, a2] (both in R^3):
+      - ||a1|| should be 1  →  penalty: (||a1||^2 - 1)^2
+      - ||a2|| should be 1  →  penalty: (||a2||^2 - 1)^2
+      - a1 ⟂ a2             →  penalty: (a1·a2)^2
+    
     Args:
-        rot_6d: (B, T, J, 6) - 6D rotation vectors
+        rot_6d: (B, T, J, 6) - raw 6D rotation vectors from decoder
         mask:   (B, T) - valid frame mask
     Returns:
         scalar loss
     '''
-    a1, a2 = rot_6d[..., :3], rot_6d[..., 3:]
-    b1 = F.normalize(a1, dim=-1)
-    b2 = a2 - (b1 * a2).sum(-1, keepdim=True) * b1
-    b2 = F.normalize(b2, dim=-1)
-    b3 = torch.cross(b1, b2, dim=-1)
-    # R: (B, T, J, 3, 3)
-    R = torch.stack((b1, b2, b3), dim=-1)
-    # R^T @ R - I
-    I = torch.eye(3, device=rot_6d.device).view(1, 1, 1, 3, 3)
-    RT_R = torch.matmul(R.transpose(-1, -2), R)
-    diff = (RT_R - I).reshape(*rot_6d.shape[:-1], 9)
-    ortho_per_joint = diff.norm(dim=-1)  # (B, T, J)
+    a1 = rot_6d[..., :3]  # (B, T, J, 3)
+    a2 = rot_6d[..., 3:]  # (B, T, J, 3)
+
+    # Unit-norm penalties
+    norm1 = a1.norm(dim=-1)  # (B, T, J)
+    norm2 = a2.norm(dim=-1)  # (B, T, J)
+    loss_unit = ((norm1.pow(2) - 1).pow(2) + (norm2.pow(2) - 1).pow(2)).mean(dim=-1)  # (B, T)
+
+    # Orthogonality penalty
+    dot = (a1 * a2).sum(dim=-1)  # (B, T, J)
+    loss_ortho = (dot.pow(2)).mean(dim=-1)  # (B, T)
+
+    loss_per_frame = loss_unit + loss_ortho  # (B, T)
+
     if mask is not None:
-        me = mask.unsqueeze(-1)  # (B, T, 1)
-        return (ortho_per_joint * me).sum() / (me.sum() * rot_6d.shape[-2] + 1e-8)
-    return ortho_per_joint.mean()
+        return (loss_per_frame * mask).sum() / (mask.sum() + 1e-8)
+    return loss_per_frame.mean()
 
 class PhysicsMetrics:
     """Lightweight physics metrics for monitoring (not used in training)."""
