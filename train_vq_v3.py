@@ -128,7 +128,7 @@ if __name__ == "__main__":
 
     # ========== 5. Optimizer ==========
     optimizer = optim.AdamW(net.parameters(), lr=args.lr, betas=(0.9, 0.99), weight_decay=args.weight_decay)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.lr_scheduler, gamma=args.gamma)
 
     if args.resume_pth is not None and os.path.exists(args.resume_pth):
         ckpt = torch.load(args.resume_pth, map_location="cuda")
