@@ -1,4 +1,4 @@
-"""utils/physics_losses.py - FK-based physical consistency losses for 363-dim G1 data
+﻿"""utils/physics_losses.py - FK-based physical consistency losses for 363-dim G1 data
 
 363-dim layout: r_velocity(1)+root_vel_xz(2)+root_y(1)+ric(87)+rot(180)+local_vel(90)+contacts(2)
 """
@@ -151,7 +151,7 @@ class PhysicsMetrics:
         ca = gt_contacts[:, 1:] * gt_contacts[:, :-1]
         if mask is not None:
             ca = ca * (mask[:, 1:] * mask[:, :-1]).unsqueeze(-1)
-        metrics['foot_skating'] = (foot_vel * ca).sum() / (ca.sum() + 1e-8)
+        metrics['foot_skating'] = ((foot_vel * ca).sum() / (ca.sum() + 1e-8)).item()
 
         vel = pred_ric[:, 1:] - pred_ric[:, :-1]
         acc = vel[:, 1:] - vel[:, :-1]

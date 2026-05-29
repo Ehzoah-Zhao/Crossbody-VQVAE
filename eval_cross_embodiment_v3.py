@@ -1,4 +1,4 @@
-"""
+﻿"""
 eval_cross_embodiment_v3.py - Evaluation for 363-dim cross-embodiment VQ-VAE
 
 Metrics: Feature MSE, 3D MPJPE (via FK), Foot Skating, Jerk
@@ -8,6 +8,7 @@ Supports paired and unpaired evaluation.
 import torch, numpy as np, os, argparse
 from os.path import join as pjoin
 from tqdm import tqdm
+import torch.nn.functional as F
 
 from models.vqvae import CrossEmbodimentVQVAE
 from utils.physics_losses import FKPositionLoss, PhysicsMetrics, G1_363_SLICES, G1_N_JOINTS, G1_CONTACT_JOINTS
