@@ -303,12 +303,15 @@ class FKPositionLossQuat(nn.Module):
 class PhysicsMetrics:
     """Lightweight physics metrics for monitoring (not used in training)."""
     @staticmethod
-    def compute(pred_363, gt_363, mask=None):
+    def compute(pred, gt, mask=None):
+        """Auto-detect 363D vs 303D based on input dimension."""
+        D = pred.shape[-1]
+        slices = G1_303_SLICES if D == 303 else G1_363_SLICES
         metrics = {}
-        ric_s, ric_e = G1_363_SLICES['ric_data']
-        pred_ric = pred_363[..., ric_s:ric_e].reshape(*pred_363.shape[:-1], G1_N_JOINTS-1, 3)
-        cs, ce = G1_363_SLICES['contacts']
-        gt_contacts = gt_363[..., cs:ce]
+        ric_s, ric_e = slices['ric_data']
+        pred_ric = pred[..., ric_s:ric_e].reshape(*pred.shape[:-1], G1_N_JOINTS-1, 3)
+        cs, ce = slices['contacts']
+        gt_contacts = gt[..., cs:ce]
 
         ee_ric_idx = [i-1 for i in G1_CONTACT_JOINTS]
         foot_pos = pred_ric[:, :, ee_ric_idx, :]
