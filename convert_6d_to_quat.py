@@ -1,5 +1,9 @@
 ﻿"""convert_6d_to_quat.py - Convert 363D 6D-rotation data to 303D quaternion data
 
+Set OUTPUT_DIR/META_OUT_DIR to data drive on server, e.g.:
+  OUTPUT_DIR = "/home/ubuntu/data_drive/dataset/unitreeg1/new_joint_vecs_v5"
+  META_OUT_DIR = "/home/ubuntu/data_drive/dataset/unitreeg1/meta_v5"
+
 Run on server:
   python convert_6d_to_quat.py
 
@@ -18,9 +22,9 @@ import torch
 
 # ================= CONFIG =================
 INPUT_DIR = "./dataset/unitreeg1/new_joint_vecs_v4"   # 363D data (system disk, read-only)
-OUTPUT_DIR = "/home/ubuntu/data_drive/dataset/unitreeg1/new_joint_vecs_v5"  # 303D data -> data drive!
+OUTPUT_DIR = "./dataset/unitreeg1/new_joint_vecs_v5"  # 303D data
 META_IN_DIR = "./dataset/unitreeg1/meta_v4"            # old Mean/Std (system disk, read-only)
-META_OUT_DIR = "/home/ubuntu/data_drive/dataset/unitreeg1/meta_v5"  # new Mean/Std -> data drive!
+META_OUT_DIR = "./dataset/unitreeg1/meta_v5"  # new Mean/Std
 
 N_JOINTS = 30
 # 363D slices
